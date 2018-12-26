@@ -1,14 +1,15 @@
 import $ from 'jquery';
-import { parseCode } from './code-analyzer';
 import {traverse} from './code-analyzer';
 import {input_vector} from './code-analyzer';
+const Viz=require('viz.js');
 
 $(document).ready(function () {
     $('#codeSubmissionButton').click(() => {
         let codeToParse = $('#codePlaceholder').val();
-        
-        let parsedCode = traverse(parseCode(codeToParse));
-        $('#parsedCode').html(parsedCode);
+        let parsedCode = traverse(codeToParse);
+        let graph=Viz('digraph { '+parsedCode+' }');
+       
+        $('#parsedCode').html(graph);
     });
 
     $('#codeSubmissionParams').click(() => {

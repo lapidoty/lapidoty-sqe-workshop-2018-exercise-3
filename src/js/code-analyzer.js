@@ -1,6 +1,8 @@
 import * as esprima from 'esprima';
 import * as escodegen from 'escodegen';
 import * as local_escodegen from '../../local_escodegen';
+
+const esgraph = require('esgraph');
 const cloneDeep = require('clone-deep');
 var astEval = require('static-eval');
 
@@ -16,7 +18,7 @@ const parseCode = (codeToParse) => {
     return esprima.parseScript(codeToParse);
 };
 
-export function to_test(jsonObj , vector) { 
+export function to_test(jsonObj, vector) {
     input_vector = new Map(vector);
     //console.log(jsonObj);
     let program = Program(jsonObj);
@@ -24,11 +26,88 @@ export function to_test(jsonObj , vector) {
     return local_escodegen.generate(program).trim();
 }
 
-export function traverse(jsonObj) {
+export function to_testGraph(code, vector) {
+    input_vector = new Map(vector);
     //console.log(jsonObj);
-    let program = Program(jsonObj);
-    //console.log(program);
-    return local_escodegen.generate(program).fontsize(4);
+    return traverse(code);
+}
+
+
+function programEvaluated(source) {
+    return {
+        type: 'Program',
+        body: Program(esprima.parse(source)).body[0].body.body,
+        sourceType: 'script',
+    };
+}
+
+function program_Not_Evaluated(source) {
+    return {
+        type: 'Program',
+        body: esprima.parse(source, { range: true }).body[0].body.body,
+        sourceType: 'script',
+    };
+}
+
+function add_Shapes(arr) {
+    let generic_shape = '", shape="square';
+    let condition_shape = '", shape="diamond';
+    arr.forEach(function (curr_node) {
+        if (curr_node.type !== 'entry') {
+            if (curr_node.normal !== undefined) {
+                curr_node.label = escodegen.generate(curr_node.astNode) + generic_shape;
+                curr_node = curr_node.normal;
+            } else if (curr_node.parent !== undefined && (curr_node.parent.type == 'IfStatement' || curr_node.parent.type == 'WhileStatement'))
+                curr_node.label = escodegen.generate(curr_node.astNode) + condition_shape;
+
+        }
+    });
+}
+
+function add_Colors(curr_node, curr_node_Evaluated) {
+    let green = ' " , style="filled", color="green'; let generic_shape = '" , shape="square';
+    let condition_shape = '", shape="diamond';
+    while (curr_node.next.length !== 0) {
+        curr_node.label = escodegen.generate(curr_node.astNode) + green;
+        if (curr_node.normal !== undefined) {
+            curr_node.label = curr_node.label + generic_shape;
+            curr_node = curr_node.normal; curr_node_Evaluated = curr_node_Evaluated.normal; continue;
+        } else {
+            if (curr_node.parent !== undefined && curr_node.parent.type == 'IfStatement')
+                curr_node.label = curr_node.label + condition_shape;
+            if (curr_node_Evaluated.parent.color == 'green') {
+                curr_node = curr_node.true; curr_node_Evaluated = curr_node_Evaluated.true;
+            }
+            else {
+                curr_node = curr_node.false; curr_node_Evaluated = curr_node_Evaluated.false;
+            }
+        }
+    }
+}
+
+function add_Numbers(arr) {
+    let count_node = 0;
+    arr.forEach(function (curr_node) {
+        if (curr_node.type !== 'exit' && curr_node.type !== 'entry') {
+            count_node++;
+            curr_node.label = `#${count_node}` + '\n' + curr_node.label;
+        }
+    }
+    );
+}
+
+export function traverse(source) {
+    let program_Evaluated = programEvaluated(source); let program = program_Not_Evaluated(source);
+    const cfg = esgraph(program); const cfg_Evaluated = esgraph(program_Evaluated);
+
+    add_Shapes(cfg[2]);
+    add_Colors(cfg[0].normal, cfg_Evaluated[0].normal);
+    add_Numbers(cfg[2]);
+
+    const dot = esgraph.dot(cfg, { source: source });
+    var new_dot = dot.replace(/([n](\d+)[ ][-][>][ ][n](\d+)[ ][[]\w*(color="red", label="exception"]))/g, '');
+
+    return new_dot;
 }
 
 function Program(program) {
@@ -47,26 +126,26 @@ function StatementListItem(body) {
 
 function Statement(statement) {
     switch (statement.type) {
-    case 'ExpressionStatement': return ExpressionStatement(statement);
-    case 'ReturnStatement': return ReturnStatement(statement);
-    case 'BlockStatement': return BlockStatement(statement);
-    default: return ConditionStatement(statement);
+        case 'ExpressionStatement': return ExpressionStatement(statement);
+        case 'ReturnStatement': return ReturnStatement(statement);
+        case 'BlockStatement': return BlockStatement(statement);
+        default: return ConditionStatement(statement);
     }
 }
 
 function ConditionStatement(statement) {
     switch (statement.type) {
-    case 'IfStatement': return IfStatement(statement);
-    case 'WhileStatement': return WhileStatement(statement);
-    case 'ForStatement': return ForStatement(statement);
-    default: return DeclarationStatement(statement);
+        case 'IfStatement': return IfStatement(statement);
+        case 'WhileStatement': return WhileStatement(statement);
+        case 'ForStatement': return ForStatement(statement);
+        default: return DeclarationStatement(statement);
     }
 }
 
 function DeclarationStatement(statement) {
     switch (statement.type) {
-    case 'VariableDeclaration': return VariableDeclaration(statement);
-    case 'FunctionDeclaration': return FunctionDeclaration(statement);
+        case 'VariableDeclaration': return VariableDeclaration(statement);
+        case 'FunctionDeclaration': return FunctionDeclaration(statement);
     }
 }
 
@@ -91,7 +170,7 @@ function VariableDeclaration(declaration) {
         kind: declaration.kind,
     };
     handleDeclarations(declarations);
-    return null;
+    return declarations;
 }
 
 function handleDeclarations(declarations) {
@@ -129,7 +208,8 @@ function AssignmentExpression(expression) {
     };
     if (ass.left.type === 'MemberExpression') handle_array(ass);
     else if (isLocal(ass.left.name)) handle_normal(ass);
-    else { input_vector.set(ass.left.name, escodegen.generate(esprima.parse(evaluate(ass.right).toString()).body[0].expression)); return ass;}
+    else { input_vector.set(ass.left.name, escodegen.generate(esprima.parse(evaluate(ass.right).toString()).body[0].expression)); }
+    return ass;
 }
 
 function IfStatement(statement) {
@@ -139,8 +219,8 @@ function IfStatement(statement) {
     current_locals = cloneDeep(old_locals);
     let consequent = Statement(statement.consequent); let alternate = null;
     current_locals = cloneDeep(old_locals);
-    if (statement.alternate !== null) {true_path = !true_path; alternate = Statement(statement.alternate); }
-    else {true_path = true;}
+    if (statement.alternate !== null) { true_path = !true_path; alternate = Statement(statement.alternate); }
+    else { true_path = true; }
     old_locals = cloneDeep(new_locals);
     current_locals = cloneDeep(new_locals);
     let node = {
@@ -190,9 +270,9 @@ function ExpressionStatement(statement) {
         expression: Expression(statement.expression),
         directive: statement.string,
     };
-    if (s.expression != null)
-        return s;
-    else return null;
+    //  if (s.expression != null)
+    return s;
+    // else return null;
 }
 
 function ReturnStatement(statement) {
@@ -207,26 +287,26 @@ function ReturnStatement(statement) {
 
 function Expression(expression) {
     switch (expression.type) {
-    case 'Identifier': return Identifier(expression);
-    case 'Literal': return Literal(expression);
-    case 'AssignmentExpression': return AssignmentExpression(expression);
-    default: return RecurseiveExpression(expression);
+        case 'Identifier': return Identifier(expression);
+        case 'Literal': return Literal(expression);
+        case 'AssignmentExpression': return AssignmentExpression(expression);
+        default: return RecurseiveExpression(expression);
     }
 }
 
 function RecurseiveExpression(expression) {
     switch (expression.type) {
-    case 'BinaryExpression': return BinaryExpression(expression);
-    case 'MemberExpression': return MemberExpression(expression);
-    case 'UnaryExpression': return UnaryExpression(expression);
-    default: return split(expression);
+        case 'BinaryExpression': return BinaryExpression(expression);
+        case 'MemberExpression': return MemberExpression(expression);
+        case 'UnaryExpression': return UnaryExpression(expression);
+        default: return split(expression);
     }
 }
 
 function split(expression) {
     switch (expression.type) {
-    case 'UpdateExpression': return UpdateExpression(expression);
-    case 'ArrayExpression': return ArrayExpression(expression);
+        case 'UpdateExpression': return UpdateExpression(expression);
+        case 'ArrayExpression': return ArrayExpression(expression);
     }
 }
 
@@ -276,9 +356,9 @@ function MemberExpression(expression) {
         property: Expression(expression.property),
     };
     let array = []; let value;
-    if (node.object.type !== 'ArrayExpression'){ 
-        array = current_locals.get(node.object.name); 
-        if( array === undefined ) return node;
+    if (node.object.type !== 'ArrayExpression') {
+        array = current_locals.get(node.object.name);
+        if (array === undefined) return node;
     }
     else array = node.object;
     let saveMode = subMode;
@@ -315,15 +395,15 @@ function FunctionParameter(params) {
 
 export function init(init) {
     switch (init.type) {
-    case 'Expression': return Expression(init);
-    default: null;
+        case 'Expression': return Expression(init);
+        default: null;
     }
 }
 
 function Param(param) {
 
     switch (param.type) {
-    case 'Identifier': return Identifier(param);
+        case 'Identifier': return Identifier(param);
     }
 }
 
