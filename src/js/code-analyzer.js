@@ -50,18 +50,24 @@ function program_Not_Evaluated(source) {
 }
 
 function add_Shapes(arr) {
+
+    for (let i = 0; i < arr.length; i++) {
+        let curr_node = arr[i];
+        if (curr_node.type === 'entry')
+            continue;
+        check_Conditions_addShapes(i, arr);
+    }
+}
+
+function check_Conditions_addShapes(i, arr) {
     let generic_shape = '", shape="square';
     let condition_shape = '", shape="diamond';
-    arr.forEach(function (curr_node) {
-        if (curr_node.type !== 'entry') {
-            if (curr_node.normal !== undefined) {
-                curr_node.label = escodegen.generate(curr_node.astNode) + generic_shape;
-                curr_node = curr_node.normal;
-            } else if (curr_node.parent !== undefined && (curr_node.parent.type == 'IfStatement' || curr_node.parent.type == 'WhileStatement'))
-                curr_node.label = escodegen.generate(curr_node.astNode) + condition_shape;
-
-        }
-    });
+    let curr_node = arr[i];
+    if (curr_node.normal !== undefined) {
+        curr_node.label = escodegen.generate(curr_node.astNode) + generic_shape;
+        curr_node = curr_node.normal;
+    } else if (curr_node.parent !== undefined && (curr_node.parent.type == 'IfStatement' || curr_node.parent.type == 'WhileStatement'))
+        curr_node.label = escodegen.generate(curr_node.astNode) + condition_shape;
 }
 
 function add_Colors(curr_node, curr_node_Evaluated) {
@@ -75,14 +81,14 @@ function add_Colors(curr_node, curr_node_Evaluated) {
         } else {
             if (curr_node.parent !== undefined && curr_node.parent.type == 'IfStatement')
                 curr_node.label = curr_node.label + condition_shape;
-            if (curr_node_Evaluated.parent.color == 'green') {
-                curr_node = curr_node.true; curr_node_Evaluated = curr_node_Evaluated.true;
-            }
-            else {
-                curr_node = curr_node.false; curr_node_Evaluated = curr_node_Evaluated.false;
-            }
+            curr_node = isGreenPath(curr_node, curr_node_Evaluated.parent.color);
+            curr_node_Evaluated = isGreenPath(curr_node_Evaluated, curr_node_Evaluated.parent.color);
         }
     }
+}
+
+function isGreenPath(curr_node, color) {
+    return curr_node = (color == 'green') ? curr_node.true : curr_node.false;
 }
 
 function add_Numbers(arr) {
@@ -126,26 +132,26 @@ function StatementListItem(body) {
 
 function Statement(statement) {
     switch (statement.type) {
-        case 'ExpressionStatement': return ExpressionStatement(statement);
-        case 'ReturnStatement': return ReturnStatement(statement);
-        case 'BlockStatement': return BlockStatement(statement);
-        default: return ConditionStatement(statement);
+    case 'ExpressionStatement': return ExpressionStatement(statement);
+    case 'ReturnStatement': return ReturnStatement(statement);
+    case 'BlockStatement': return BlockStatement(statement);
+    default: return ConditionStatement(statement);
     }
 }
 
 function ConditionStatement(statement) {
     switch (statement.type) {
-        case 'IfStatement': return IfStatement(statement);
-        case 'WhileStatement': return WhileStatement(statement);
-        case 'ForStatement': return ForStatement(statement);
-        default: return DeclarationStatement(statement);
+    case 'IfStatement': return IfStatement(statement);
+    case 'WhileStatement': return WhileStatement(statement);
+    case 'ForStatement': return ForStatement(statement);
+    default: return DeclarationStatement(statement);
     }
 }
 
 function DeclarationStatement(statement) {
     switch (statement.type) {
-        case 'VariableDeclaration': return VariableDeclaration(statement);
-        case 'FunctionDeclaration': return FunctionDeclaration(statement);
+    case 'VariableDeclaration': return VariableDeclaration(statement);
+    case 'FunctionDeclaration': return FunctionDeclaration(statement);
     }
 }
 
@@ -287,26 +293,26 @@ function ReturnStatement(statement) {
 
 function Expression(expression) {
     switch (expression.type) {
-        case 'Identifier': return Identifier(expression);
-        case 'Literal': return Literal(expression);
-        case 'AssignmentExpression': return AssignmentExpression(expression);
-        default: return RecurseiveExpression(expression);
+    case 'Identifier': return Identifier(expression);
+    case 'Literal': return Literal(expression);
+    case 'AssignmentExpression': return AssignmentExpression(expression);
+    default: return RecurseiveExpression(expression);
     }
 }
 
 function RecurseiveExpression(expression) {
     switch (expression.type) {
-        case 'BinaryExpression': return BinaryExpression(expression);
-        case 'MemberExpression': return MemberExpression(expression);
-        case 'UnaryExpression': return UnaryExpression(expression);
-        default: return split(expression);
+    case 'BinaryExpression': return BinaryExpression(expression);
+    case 'MemberExpression': return MemberExpression(expression);
+    case 'UnaryExpression': return UnaryExpression(expression);
+    default: return split(expression);
     }
 }
 
 function split(expression) {
     switch (expression.type) {
-        case 'UpdateExpression': return UpdateExpression(expression);
-        case 'ArrayExpression': return ArrayExpression(expression);
+    case 'UpdateExpression': return UpdateExpression(expression);
+    case 'ArrayExpression': return ArrayExpression(expression);
     }
 }
 
@@ -395,15 +401,15 @@ function FunctionParameter(params) {
 
 export function init(init) {
     switch (init.type) {
-        case 'Expression': return Expression(init);
-        default: null;
+    case 'Expression': return Expression(init);
+    default: null;
     }
 }
 
 function Param(param) {
 
     switch (param.type) {
-        case 'Identifier': return Identifier(param);
+    case 'Identifier': return Identifier(param);
     }
 }
 
